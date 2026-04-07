@@ -41,7 +41,40 @@ def send_alert(message):
     requests.post(WEBHOOK_URL, json={"content": content})
 
 def main():
-    send_alert("✅ TEST MESSAGE — bot is working!")
+    state = load_state()
+    soup = get_page()
+
+    current_scan = get_last_scan(soup)
+
+    # Only act on new scans
+    if current_scan == state["last_scan"]:
+        print("No new scan.")
+        return
+
+    print("New scan detected!")
+    state["last_scan"] = current_scan
+
+    if not item_exists(soup):
+        print("Item not on AH.")
+        save_state(state)
+        return
+
+    price, amount = get_price_and_amount(soup)
+
+    if price is None:
+        print("Could not parse price.")
+        save_state(state)
+        return
+
+    previous_price = state.get("lowest_price")
+
+    if previous_price is None:
+        send_alert(f"🔥 Bold Stormjewel is on AH! Price: {price}g | Amount: {amount}")
+    elif price < previous_price:
+        send_alert(f"💰 Cheaper Bold Stormjewel! {price}g (was {previous_price}g) | Amount: {amount}")
+
+    state["lowest_price"] = price
+    save_state(state)
 
 if __name__ == "__main__":
     main()
