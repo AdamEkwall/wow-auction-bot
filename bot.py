@@ -55,7 +55,7 @@ def get_price_and_amount(soup):
 
 def send_alert(message):
     # IMPORTANT: replace with real Discord mention ID if needed
-    content = f"<@ekwall> {message}"
+    content = f"<@203262759113195520> {message}"
     requests.post(WEBHOOK_URL, json={"content": content})
 
 def main():
