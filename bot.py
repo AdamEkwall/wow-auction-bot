@@ -96,10 +96,10 @@ else:
 
     if state["last_price"] is None:
         alert_needed = True
-            elif price < state["last_price"]:
-            alert_needed = True
-            elif price == state["last_price"] and amount != state.get("last_amount"):
-            alert_needed = True
+        elif price < state["last_price"]:
+        alert_needed = True
+        elif price == state["last_price"] and amount != state.get("last_amount"):
+        alert_needed = True
 
     if alert_needed:
         content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {price}g | Amount: {amount}"
