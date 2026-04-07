@@ -61,6 +61,10 @@ def send_alert(message):
 def main():
     state = load_state()
     soup = get_page()
+        print("---- PAGE TEXT START ----")
+        print(soup.get_text())
+        print("---- PAGE TEXT END ----")
+    
 
     current_scan = get_last_scan(soup)
 
