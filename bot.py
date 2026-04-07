@@ -30,10 +30,28 @@ def get_last_scan(soup):
     return None
 
 def item_exists(soup):
-    return True  # FORCE item to exist
+    text = soup.get_text().lower()
+
+    if "not on the auction house right now" in text:
+        return False
+    if "no auctions of this item right now" in text:
+        return False
+
+    return True
 
 def get_price_and_amount(soup):
-    return 500, 3  # fake price + amount
+    text = soup.get_text().lower()
+
+    price = None
+    amount = None
+
+    for line in text.split("\n"):
+        if "minimum buyout" in line:
+            price = int(''.join(filter(str.isdigit, line)))
+        if "amount" in line:
+            amount = int(''.join(filter(str.isdigit, line)))
+
+    return price, amount
 
 def send_alert(message):
     # IMPORTANT: replace with real Discord mention ID if needed
@@ -47,7 +65,9 @@ def main():
     current_scan = get_last_scan(soup)
 
     # Only act on new scans
-    print("Skipping scan check for testing")
+    if current_scan == state["last_scan"]:
+    print("No new scan.")
+    return
 
     print("New scan detected!")
     state["last_scan"] = current_scan
