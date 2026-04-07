@@ -17,7 +17,11 @@ if os.path.exists(STATE_FILE):
     with open(STATE_FILE, "r") as f:
         state = json.load(f)
 else:
-    state = {"last_price": None, "last_amount": None}
+    state = {}
+
+# Ensure keys exist (prevents crash)
+state.setdefault("last_price", None)
+state.setdefault("last_amount", None)
 
 # Setup headless Chrome
 chrome_options = Options()
@@ -49,17 +53,24 @@ def item_exists(soup):
 
 # Parse price and amount
 def get_price_and_amount(soup):
-    text = soup.get_text()
+    text = soup.get_text(separator="\n").lower()
+
     price = None
     amount = None
 
     for line in text.split("\n"):
         line = line.strip()
-        if "minimum buyout" in line.lower():
-            # Extract numbers only
-            price = int(''.join(filter(str.isdigit, line)))
-        if "amount" in line.lower():
-            amount = int(''.join(filter(str.isdigit, line)))
+
+        if "buyout" in line:
+            numbers = ''.join(filter(str.isdigit, line))
+            if numbers:
+                price = int(numbers)
+
+        if "amount" in line or "quantity" in line:
+            numbers = ''.join(filter(str.isdigit, line))
+            if numbers:
+                amount = int(numbers)
+
     return price, amount
 
 # Main logic
