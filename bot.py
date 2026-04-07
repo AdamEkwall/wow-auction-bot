@@ -55,7 +55,7 @@ def get_price_and_amount(soup):
 
 def send_alert(message):
     # IMPORTANT: replace with real Discord mention ID if needed
-    content = f"<203262759113195520> {message}"
+    content = f"<@ekwall> {message}"
     requests.post(WEBHOOK_URL, json={"content": content})
 
 def main():
@@ -66,8 +66,8 @@ def main():
 
     # Only act on new scans
     if current_scan == state["last_scan"]:
-    print("No new scan.")
-    return
+        print("No new scan.")
+        return
 
     print("New scan detected!")
     state["last_scan"] = current_scan
