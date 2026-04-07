@@ -43,6 +43,8 @@ time.sleep(5)
 # Parse page
 soup = BeautifulSoup(driver.page_source, "html.parser")
 driver.quit()
+print("---- FULL HTML ----")
+print(driver.page_source)
 
 # Detect if item is on AH
 def item_exists(soup):
