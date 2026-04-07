@@ -47,9 +47,7 @@ def main():
     current_scan = get_last_scan(soup)
 
     # Only act on new scans
-    if current_scan == state["last_scan"]:
-        print("No new scan.")
-        return
+    iprint("Skipping scan check for testing")
 
     print("New scan detected!")
     state["last_scan"] = current_scan
