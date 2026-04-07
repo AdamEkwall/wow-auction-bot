@@ -4,113 +4,98 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
-# ---------------- CONFIG ----------------
+# CONFIG
 URL = "https://www.wowauctions.net/auctionHouse/chromie-craft/chromiecraft/mergedAh/bold-stormjewel-45862"
 STATE_FILE = "state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 DISCORD_USER_ID = "203262759113195520"  # @ekwall
-WAIT_SECONDS = 5  # wait for JS to load
 
-# ---------------- LOAD STATE ----------------
+# Load previous state
 if os.path.exists(STATE_FILE):
     with open(STATE_FILE, "r") as f:
         state = json.load(f)
 else:
     state = {}
 
-# Ensure keys exist
+# Ensure keys exist (prevents crash)
 state.setdefault("last_price", None)
 state.setdefault("last_amount", None)
 
-# ---------------- SETUP SELENIUM ----------------
+# Setup headless Chrome
 chrome_options = Options()
-chrome_options.add_argument("--headless=new")  # new headless mode
+chrome_options.add_argument("--headless")
 chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
-chrome_options.add_argument("--disable-gpu")
-chrome_options.add_argument("--window-size=1920,1080")
-chrome_options.binary_location = "/usr/bin/chromium-browser"
+
+from selenium.webdriver.chrome.service import Service
 
 service = Service("/usr/bin/chromedriver")
+chrome_options.binary_location = "/usr/bin/chromium-browser"
+
 driver = webdriver.Chrome(service=service, options=chrome_options)
-
 driver.get(URL)
-time.sleep(WAIT_SECONDS)  # wait for JS to load
 
-# ---------------- PARSE PAGE ----------------
+# Wait for JS to load
+time.sleep(5)
+
+# Parse page
 soup = BeautifulSoup(driver.page_source, "html.parser")
 driver.quit()
 
-text = soup.get_text(separator="\n").lower()
+# Detect if item is on AH
+def item_exists(soup):
+    text = soup.get_text().lower()
+    if "not on the auction house right now" in text:
+        return False
+    return True
 
-# ---------------- CHECK IF ITEM EXISTS ----------------
-def item_exists(text):
-    return "not on the auction house right now" not in text
+# Parse price and amount
+def get_price_and_amount(soup):
+    text = soup.get_text(separator="\n").lower()
 
-# ---------------- PARSE PRICE AND AMOUNT ----------------
-def get_price_and_amount(text):
     price = None
     amount = None
-    lines = text.split("\n")
-    for line in lines:
+
+    for line in text.split("\n"):
         line = line.strip()
-        # Parse amount
-        if "amount" in line:
-            try:
-                parts = line.split()
-                for i, part in enumerate(parts):
-                    if part.lower() == "amount":
-                        # next part should be the number
-                        amount = int(parts[i + 1])
-                        break
-            except Exception as e:
-                print("Failed to parse amount:", e)
-        # Parse minimum buyout
-        if "minimum buyout" in line:
-            try:
-                # find first number before 'g'
-                parts = line.split()
-                for part in parts:
-                    if "g" in part.lower():  # e.g., "20000g"
-                        price = int(''.join(filter(str.isdigit, part)))
-                        break
-            except Exception as e:
-                print("Failed to parse price:", e)
+
+        if "buyout" in line:
+            numbers = ''.join(filter(str.isdigit, line))
+            if numbers:
+                price = int(numbers)
+
+        if "amount" in line or "quantity" in line:
+            numbers = ''.join(filter(str.isdigit, line))
+            if numbers:
+                amount = int(numbers)
+
     return price, amount
 
-# ---------------- MAIN LOGIC ----------------
-if not item_exists(text):
+# Main logic
+if not item_exists(soup):
     print("Item not on AH.")
 else:
-    price, amount = get_price_and_amount(text)
+    price, amount = get_price_and_amount(soup)
     print(f"Found AH item: Price={price}, Amount={amount}")
 
     alert_needed = False
 
-    # Always alert if first scan
     if state["last_price"] is None:
         alert_needed = True
-    # Alert if price dropped
-    elif price is not None and (state["last_price"] is None or price < state["last_price"]):
+    elif price < state["last_price"]:
         alert_needed = True
 
-    if alert_needed and price is not None and amount is not None:
+    if alert_needed:
         content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {price}g | Amount: {amount}"
-        try:
-            requests.post(WEBHOOK_URL, json={"content": content})
-            print("Discord alert sent!")
-        except Exception as e:
-            print("Failed to send Discord alert:", e)
+        requests.post(WEBHOOK_URL, json={"content": content})
+        print("Discord alert sent!")
 
     # Update state
-    if price is not None:
-        state["last_price"] = price
-    if amount is not None:
-        state["last_amount"] = amount
+    state["last_price"] = price
+    state["last_amount"] = amount
 
-# ---------------- SAVE STATE ----------------
+# Save state
 with open(STATE_FILE, "w") as f:
     json.dump(state, f)
