@@ -40,6 +40,12 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 
+      - name: Upload full page HTML
+        uses: actions/upload-artifact@v3
+        with:
+          name: full_page
+          path: full_page.html  
+
       - name: Save state
         uses: actions/cache@v4
         with:
