@@ -49,6 +49,10 @@ try:
 except:
     print("Timeout waiting for auction data")
 
+with open("full_page.html", "w", encoding="utf-8") as f:
+    f.write(driver.page_source)
+print("Saved full page source to full_page.html")
+
 # Parse page
 soup = BeautifulSoup(driver.page_source, "html.parser")
 driver.quit()
