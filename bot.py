@@ -1,102 +1,85 @@
+import os
+import json
+import time
 import requests
 from bs4 import BeautifulSoup
-import json
-import os
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
+# CONFIG
 URL = "https://www.wowauctions.net/auctionHouse/chromie-craft/chromiecraft/mergedAh/bold-stormjewel-45862"
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
-
 STATE_FILE = "state.json"
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
+DISCORD_USER_ID = "203262759113195520"  # @ekwall
 
-def load_state():
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, "r") as f:
-            return json.load(f)
-    return {"last_scan": None, "lowest_price": None}
+# Load previous state
+if os.path.exists(STATE_FILE):
+    with open(STATE_FILE, "r") as f:
+        state = json.load(f)
+else:
+    state = {"last_price": None, "last_amount": None}
 
-def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f)
+# Setup headless Chrome
+chrome_options = Options()
+chrome_options.add_argument("--headless")
+chrome_options.add_argument("--no-sandbox")
+chrome_options.add_argument("--disable-dev-shm-usage")
 
-def get_page():
-    response = requests.get(URL, timeout=10)
-    return BeautifulSoup(response.text, "html.parser")
+driver = webdriver.Chrome(options=chrome_options)
+driver.get(URL)
 
-def get_last_scan(soup):
-    text = soup.get_text().lower()
-    for line in text.split("\n"):
-        if "last scan" in line:
-            return line.strip()
-    return None
+# Wait for JS to load
+time.sleep(5)
 
+# Parse page
+soup = BeautifulSoup(driver.page_source, "html.parser")
+driver.quit()
+
+# Detect if item is on AH
 def item_exists(soup):
     text = soup.get_text().lower()
-
     if "not on the auction house right now" in text:
         return False
-    if "no auctions of this item right now" in text:
-        return False
-
     return True
 
+# Parse price and amount
 def get_price_and_amount(soup):
-    text = soup.get_text().lower()
-
+    text = soup.get_text()
     price = None
     amount = None
 
     for line in text.split("\n"):
-        if "minimum buyout" in line:
+        line = line.strip()
+        if "minimum buyout" in line.lower():
+            # Extract numbers only
             price = int(''.join(filter(str.isdigit, line)))
-        if "amount" in line:
+        if "amount" in line.lower():
             amount = int(''.join(filter(str.isdigit, line)))
-
     return price, amount
 
-def send_alert(message):
-    # IMPORTANT: replace with real Discord mention ID if needed
-    content = f"<@203262759113195520> {message}"
-    requests.post(WEBHOOK_URL, json={"content": content})
-
-def main():
-    state = load_state()
-    soup = get_page()
-    print("---- PAGE TEXT START ----")
-    print(soup.get_text())
-    print("---- PAGE TEXT END ----")
-    
-
-    current_scan = get_last_scan(soup)
-
-    # Only act on new scans
-    if current_scan == state["last_scan"]:
-        print("No new scan.")
-        return
-
-    print("New scan detected!")
-    state["last_scan"] = current_scan
-
-    if not item_exists(soup):
-        print("Item not on AH.")
-        save_state(state)
-        return
-
+# Main logic
+if not item_exists(soup):
+    print("Item not on AH.")
+else:
     price, amount = get_price_and_amount(soup)
+    print(f"Found AH item: Price={price}, Amount={amount}")
 
-    if price is None:
-        print("Could not parse price.")
-        save_state(state)
-        return
+    alert_needed = False
 
-    previous_price = state.get("lowest_price")
+    if state["last_price"] is None:
+        alert_needed = True
+    elif price < state["last_price"]:
+        alert_needed = True
 
-    if previous_price is None:
-        send_alert(f"🔥 Bold Stormjewel is on AH! Price: {price}g | Amount: {amount}")
-    elif price < previous_price:
-        send_alert(f"💰 Cheaper Bold Stormjewel! {price}g (was {previous_price}g) | Amount: {amount}")
+    if alert_needed:
+        content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {price}g | Amount: {amount}"
+        requests.post(WEBHOOK_URL, json={"content": content})
+        print("Discord alert sent!")
 
-    state["lowest_price"] = price
-    save_state(state)
+    # Update state
+    state["last_price"] = price
+    state["last_amount"] = amount
 
-if __name__ == "__main__":
-    main()
+# Save state
+with open(STATE_FILE, "w") as f:
+    json.dump(state, f)
