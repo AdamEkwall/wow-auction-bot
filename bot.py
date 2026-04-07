@@ -29,26 +29,34 @@ def get_last_scan(soup):
             return line.strip()
     return None
 
-def get_lowest_price(soup):
+def item_exists(soup):
     text = soup.get_text().lower()
 
+    if "not on the auction house right now" in text:
+        return False
     if "no auctions of this item right now" in text:
-        return None
+        return False
 
-    prices = []
-    for td in soup.find_all("td"):
-        t = td.get_text(strip=True).replace(",", "")
-        if any(char.isdigit() for char in t):
-            try:
-                price = int(''.join(filter(str.isdigit, t)))
-                prices.append(price)
-            except:
-                continue
+    return True
 
-    return min(prices) if prices else None
+def get_price_and_amount(soup):
+    text = soup.get_text().lower()
+
+    price = None
+    amount = None
+
+    for line in text.split("\n"):
+        if "minimum buyout" in line:
+            price = int(''.join(filter(str.isdigit, line)))
+        if "amount" in line:
+            amount = int(''.join(filter(str.isdigit, line)))
+
+    return price, amount
 
 def send_alert(message):
-    requests.post(WEBHOOK_URL, json={"content": message})
+    # IMPORTANT: replace with real Discord mention ID if needed
+    content = f"<203262759113195520> {message}"
+    requests.post(WEBHOOK_URL, json={"content": content})
 
 def main():
     state = load_state()
@@ -56,31 +64,34 @@ def main():
 
     current_scan = get_last_scan(soup)
 
-    # Only proceed if new scan
+    # Only act on new scans
     if current_scan == state["last_scan"]:
-        print("No new scan yet.")
+        print("No new scan.")
         return
 
     print("New scan detected!")
-
     state["last_scan"] = current_scan
 
-    current_price = get_lowest_price(soup)
+    if not item_exists(soup):
+        print("Item not on AH.")
+        save_state(state)
+        return
 
-    if current_price is None:
-        print("No auctions found.")
+    price, amount = get_price_and_amount(soup)
+
+    if price is None:
+        print("Could not parse price.")
         save_state(state)
         return
 
     previous_price = state.get("lowest_price")
 
-    # Notify conditions
     if previous_price is None:
-        send_alert(f"🔥 Bold Stormjewel is now on AH! Price: {current_price}g")
-    elif current_price < previous_price:
-        send_alert(f"💰 Cheaper Bold Stormjewel found! New price: {current_price}g (was {previous_price}g)")
+        send_alert(f"🔥 Bold Stormjewel is on AH! Price: {price}g | Amount: {amount}")
+    elif price < previous_price:
+        send_alert(f"💰 Cheaper Bold Stormjewel! {price}g (was {previous_price}g) | Amount: {amount}")
 
-    state["lowest_price"] = current_price
+    state["lowest_price"] = price
     save_state(state)
 
 if __name__ == "__main__":
