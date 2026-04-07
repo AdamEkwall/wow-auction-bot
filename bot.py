@@ -13,7 +13,6 @@ STATE_FILE = "state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 DISCORD_USER_ID = "203262759113195520"  # @ekwall
 WAIT_SECONDS = 5  # wait for JS to load
-# ---------------------------------------
 
 # ---------------- LOAD STATE ----------------
 if os.path.exists(STATE_FILE):
@@ -33,63 +32,54 @@ chrome_options.add_argument("--no-sandbox")
 chrome_options.add_argument("--disable-dev-shm-usage")
 chrome_options.add_argument("--disable-gpu")
 chrome_options.add_argument("--window-size=1920,1080")
-
-# GitHub Actions paths
 chrome_options.binary_location = "/usr/bin/chromium-browser"
-service = Service("/usr/bin/chromedriver")
 
+service = Service("/usr/bin/chromedriver")
 driver = webdriver.Chrome(service=service, options=chrome_options)
+
 driver.get(URL)
 time.sleep(WAIT_SECONDS)  # wait for JS to load
 
-# ---------------- DEBUG: PRINT HTML ----------------
-# Uncomment for troubleshooting
-# print("---- FULL HTML ----")
-# print(driver.page_source)
-# print("---- END OF HTML ----")
-
-# Parse page
+# ---------------- PARSE PAGE ----------------
 soup = BeautifulSoup(driver.page_source, "html.parser")
 driver.quit()
 
+text = soup.get_text(separator="\n").lower()
+
 # ---------------- CHECK IF ITEM EXISTS ----------------
-def item_exists(soup):
-    text = soup.get_text().lower()
-    if "not on the auction house right now" in text:
-        return False
-    return True
+def item_exists(text):
+    return "not on the auction house right now" not in text
 
 # ---------------- PARSE PRICE AND AMOUNT ----------------
-def get_price_and_amount(soup):
+def get_price_and_amount(text):
     price = None
     amount = None
-
-    # Look for table cells or spans
-    tds = soup.find_all("td")
-    for i in range(len(tds)):
-        text = tds[i].get_text(strip=True).lower()
-
-        # Buyout price
-        if "buyout" in text:
-            next_td = tds[i + 1].get_text(strip=True)
-            numbers = ''.join(filter(str.isdigit, next_td))
-            if numbers:
-                price = int(numbers)
-
-        # Amount / quantity
-        if "amount" in text or "quantity" in text:
-            next_td = tds[i + 1].get_text(strip=True)
-            numbers = ''.join(filter(str.isdigit, next_td))
-            if numbers:
-                amount = int(numbers)
-
+    lines = text.split("\n")
+    for line in lines:
+        line = line.strip()
+        # Parse amount
+        if line.startswith("current prices amount"):
+            try:
+                parts = line.split()
+                idx_amount = parts.index("amount")
+                amount = int(parts[idx_amount + 1])
+            except Exception as e:
+                print("Failed to parse amount:", e)
+        # Parse minimum buyout
+        if "minimum buyout" in line:
+            try:
+                parts = line.replace("g", "").split()
+                idx_mb = parts.index("minimum")  # word "minimum"
+                price = int(parts[idx_mb + 2])  # 2 words after "minimum" = number
+            except Exception as e:
+                print("Failed to parse price:", e)
     return price, amount
 
 # ---------------- MAIN LOGIC ----------------
-if not item_exists(soup):
+if not item_exists(text):
     print("Item not on AH.")
 else:
-    price, amount = get_price_and_amount(soup)
+    price, amount = get_price_and_amount(text)
     print(f"Found AH item: Price={price}, Amount={amount}")
 
     alert_needed = False
