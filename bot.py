@@ -37,8 +37,17 @@ chrome_options.binary_location = "/usr/bin/chromium-browser"
 driver = webdriver.Chrome(service=service, options=chrome_options)
 driver.get(URL)
 
-# Wait for JS to load
-time.sleep(5)
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+try:
+    # Wait up to 15 seconds for "Minimum Buyout" to appear in the page
+    WebDriverWait(driver, 15).until(
+        EC.presence_of_element_located((By.XPATH, "//*[contains(text(),'Minimum Buyout')]"))
+    )
+except:
+    print("Timeout waiting for auction data")
 
 # Parse page
 soup = BeautifulSoup(driver.page_source, "html.parser")
@@ -52,24 +61,27 @@ def item_exists(soup):
     return True
 
 # Parse price and amount
+import re
+
 def get_price_and_amount(soup):
     text = soup.get_text(separator="\n").lower()
-
     price = None
     amount = None
 
     for line in text.split("\n"):
         line = line.strip()
 
-        if "buyout" in line:
-            numbers = ''.join(filter(str.isdigit, line))
-            if numbers:
-                price = int(numbers)
+        # Minimum Buyout
+        if "minimum buyout" in line:
+            match = re.search(r'minimum buyout\s+(\d+)', line)
+            if match:
+                price = int(match.group(1))
 
+        # Amount or Quantity
         if "amount" in line or "quantity" in line:
-            numbers = ''.join(filter(str.isdigit, line))
-            if numbers:
-                amount = int(numbers)
+            match = re.search(r'(?:amount|quantity)\s+(\d+)', line)
+            if match:
+                amount = int(match.group(1))
 
     return price, amount
 
@@ -83,8 +95,10 @@ else:
     alert_needed = False
 
     if state["last_price"] is None:
+    alert_needed = True
+        elif price < state["last_price"]:
         alert_needed = True
-    elif price < state["last_price"]:
+        elif price == state["last_price"] and amount != state.get("last_amount"):
         alert_needed = True
 
     if alert_needed:
