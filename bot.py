@@ -96,9 +96,9 @@ else:
 
     if state["last_price"] is None:
         alert_needed = True
-        elif price < state["last_price"]:
+    elif price is not None and state["last_price"] is not None and price < state["last_price"]:
         alert_needed = True
-        elif price == state["last_price"] and amount != state.get("last_amount"):
+    elif price == state.get("last_price") and amount != state.get("last_amount"):
         alert_needed = True
 
     if alert_needed:
@@ -106,6 +106,9 @@ else:
         requests.post(WEBHOOK_URL, json={"content": content})
         print("Discord alert sent!")
 
+    # Update state
+    state["last_price"] = price
+    state["last_amount"] = amount
     # Update state
     state["last_price"] = price
     state["last_amount"] = amount
