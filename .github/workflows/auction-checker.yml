@@ -41,7 +41,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 
       - name: Upload full page HTML
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: full_page
           path: full_page.html  
