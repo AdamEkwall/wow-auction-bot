@@ -1,12 +1,10 @@
 name: Auction Checker
 
-# Run every 15 minutes automatically + manual trigger
 on:
   schedule:
-    - cron: "*/15 * * * *"  # every 15 minutes UTC
-  workflow_dispatch:         # optional manual run
+    - cron: "*/15 * * * *"  # every 15 min UTC
+  workflow_dispatch:
 
-# Force Node.js 24 for actions to avoid deprecation warning
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -15,34 +13,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: checkout repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # Step 2: load cached state.json so bot remembers last scan & lowest price
       - name: Load previous state
         uses: actions/cache@v4
         with:
           path: state.json
           key: auction-state
 
-      # Step 3: setup Python environment
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: 3.11
 
-      # Step 4: install dependencies
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Step 5: run the bot
-      - name: Run Auction Bot
+      - name: Install Chrome
+        run: sudo apt-get update && sudo apt-get install -y chromium-browser chromium-chromedriver
+
+      - name: Run bot
         run: python bot.py
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 
-      # Step 6: save updated state.json for next run
       - name: Save state
         uses: actions/cache@v4
         with:
