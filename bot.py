@@ -58,19 +58,25 @@ def get_price_and_amount(text):
     for line in lines:
         line = line.strip()
         # Parse amount
-        if line.startswith("current prices amount"):
+        if "amount" in line:
             try:
                 parts = line.split()
-                idx_amount = parts.index("amount")
-                amount = int(parts[idx_amount + 1])
+                for i, part in enumerate(parts):
+                    if part.lower() == "amount":
+                        # next part should be the number
+                        amount = int(parts[i + 1])
+                        break
             except Exception as e:
                 print("Failed to parse amount:", e)
         # Parse minimum buyout
         if "minimum buyout" in line:
             try:
-                parts = line.replace("g", "").split()
-                idx_mb = parts.index("minimum")  # word "minimum"
-                price = int(parts[idx_mb + 2])  # 2 words after "minimum" = number
+                # find first number before 'g'
+                parts = line.split()
+                for part in parts:
+                    if "g" in part.lower():  # e.g., "20000g"
+                        price = int(''.join(filter(str.isdigit, part)))
+                        break
             except Exception as e:
                 print("Failed to parse price:", e)
     return price, amount
