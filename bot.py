@@ -2,7 +2,6 @@ import requests
 import os
 import re
 import json
-import subprocess
 
 # ================= CONFIG =================
 URL = "https://www.wowauctions.net/auctionHouse/chromie-craft/chromiecraft/mergedAh/bold-stormjewel-45862"
@@ -11,12 +10,7 @@ STATE_FILE = "state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 DISCORD_USER_ID = "203262759113195520"
 TIMEOUT = 20  # seconds
-BRANCH = "auction-state"
 # =========================================
-
-# -------- Ensure we are on the state branch -------------
-subprocess.run(["git", "fetch", "origin", BRANCH], check=False)
-subprocess.run(["git", "checkout", "-B", BRANCH], check=True)
 
 # -------- Load previous state -------------
 if os.path.exists(STATE_FILE):
@@ -33,7 +27,7 @@ try:
     response = requests.get(
         PROXY_URL,
         timeout=TIMEOUT,
-        headers={"x-no-cache": "true"}
+        headers={"x-no-cache": "true"}  # prevent caching
     )
     response.raise_for_status()
     text = response.text.lower()
@@ -52,7 +46,9 @@ amount_match = re.search(r"amount\s+(\d+)", text)
 amount = int(amount_match.group(1)) if amount_match else 0
 
 # -------- Extract Price (gold/silver/copper) ---------
-price_match = re.search(r"minimum buyout\s+(\d+)\s*g(?:\s*(\d+)\s*s)?(?:\s*(\d+)\s*c)?", text)
+price_match = re.search(
+    r"minimum buyout\s+(\d+)\s*g(?:\s*(\d+)\s*s)?(?:\s*(\d+)\s*c)?", text
+)
 if price_match:
     g = int(price_match.group(1))
     s = int(price_match.group(2) or 0)
@@ -61,6 +57,7 @@ if price_match:
 else:
     price = None
 
+# -------- Convert to gold for printing -------
 gold_price = price // 10000 if price else None
 
 # -------- Verification output ---------------
@@ -72,15 +69,17 @@ print(f"Price: {gold_price}g" if gold_price else "Price not found")
 alert_needed = False
 
 if on_ah and price:
-    # New logic: wipe memory if only one item is listed and price increased
+    # If last listing is gone or new price is lower, alert
     if state["last_price"] is None:
         alert_needed = True
     elif price < state["last_price"]:
         alert_needed = True
+    # Amount changed triggers alert
     elif amount != state.get("last_amount", 0):
         alert_needed = True
+    # Only one listing but price is higher than stored → wipe memory & alert
     elif amount == 1 and state["last_price"] and price > state["last_price"]:
-        # New listing with higher price, reset memory
+        print("Single listing higher than previous → wiping memory")
         state["last_price"] = None
         state["last_amount"] = None
         alert_needed = True
@@ -89,11 +88,14 @@ if on_ah and price:
         content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {gold_price}g | Amount: {amount}"
         requests.post(WEBHOOK_URL, json={"content": content})
         print("Discord alert sent!")
+
 else:
-    print("Item not currently listed.")
-    # Wipe memory if no listing
+    # Item removed → wipe state
+    if state["last_price"] is not None:
+        print("Item removed from AH → wiping memory")
     state["last_price"] = None
     state["last_amount"] = None
+    print("Item not currently listed.")
 
 # -------- Update state ---------------------
 state["last_price"] = price if on_ah else None
