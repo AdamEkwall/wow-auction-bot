@@ -1,36 +1,34 @@
 name: Auction Checker
-
 on:
   workflow_dispatch:
-
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-
     steps:
       # Step 1: Checkout repository WITHOUT default credentials
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           persist-credentials: false  # disables github-actions[bot] token
-
       # Step 2: Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: 3.11
-
-      # Step 3: Install dependencies
+      # Step 3: Restore state.json from auction-state branch
+      - name: Restore state.json
+        run: |
+          git fetch origin auction-state || echo "No auction-state branch yet"
+          git checkout origin/auction-state -- state.json || echo "No state.json yet"
+      # Step 4: Install dependencies
       - name: Install dependencies
         run: pip install -r requirements.txt
-
-      # Step 4: Run bot
+      # Step 5: Run bot
       - name: Run bot
         run: python bot.py
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-
-      # Step 5: Commit updated state.json to auction-state branch using PAT
+      # Step 6: Commit updated state.json to auction-state branch using PAT
       - name: Commit updated state.json
         run: |
           git config --local user.name "GitHub Actions Bot"
@@ -41,7 +39,6 @@ jobs:
           git remote remove origin
           git remote add origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/AdamEkwall/wow-auction-bot.git
           git push origin auction-state --force
-
-      # Step 6: Show state.json for debugging
+      # Step 7: Show state.json for debugging
       - name: Show state.json
         run: cat state.json || echo "state.json does not exist"
