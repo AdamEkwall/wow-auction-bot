@@ -1,9 +1,13 @@
 import requests
 
-url = "https://api.wowauctions.net/items/stats/30d/chromiecraft/mergedAh/45862"
+url = "https://www.wowauctions.net/_next/data/Q3nbXdN5bJfNCngEBsXEq/index.json"
 
-response = requests.get(url)
+headers = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "*/*"
+}
+
+response = requests.get(url, headers=headers)
 
 print("STATUS:", response.status_code)
-print("TEXT PREVIEW:")
-print(response.text[:500])  # print first 500 chars
+print(response.text[:1000])
