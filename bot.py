@@ -19,11 +19,7 @@ else:
 
 state.setdefault("last_price", None)
 
-# Request data
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
-
+# Fetch via proxy
 proxy_url = f"https://r.jina.ai/{URL}"
 response = requests.get(proxy_url)
 
@@ -32,10 +28,19 @@ if response.status_code != 200:
     print(response.text[:300])
     exit()
 
-print("STATUS:", response.status_code)
-print("RAW RESPONSE:")
-print(response.text[:1000])
-exit()
+text = response.text
+
+# 🔥 Extract JSON from wrapped response
+start = text.find("{")
+end = text.rfind("}") + 1
+
+if start == -1 or end == -1:
+    print("Could not find JSON in response")
+    exit()
+
+json_text = text[start:end]
+
+data = json.loads(json_text)
 
 # Extract values
 stats = data["pageProps"]["item"]["stats"]
@@ -48,7 +53,7 @@ gold = price // 10000
 
 print(f"Price: {gold}g | Amount: {amount}")
 
-# Detect listing
+# Alert logic
 if amount > 0:
     alert_needed = False
 
