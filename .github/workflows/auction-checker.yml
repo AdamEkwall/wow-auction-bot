@@ -10,12 +10,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Restore state
-        uses: actions/cache@v4
         with:
-          path: state.json
-          key: auction-state
+          persist-credentials: true  # needed to push changes
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -30,11 +26,11 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 
-      - name: Save state
-        uses: actions/cache@v4
-        with:
-          path: state.json
-          key: auction-state
-
-      - name: Show state.json
-        run: cat state.json || echo "state.json does not exist"
+      - name: Commit updated state.json
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B auction-state
+          git add state.json
+          git commit -m "Update auction state [skip ci]" || echo "No changes to commit"
+          git push --force origin auction-state
