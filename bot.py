@@ -67,6 +67,13 @@ print(f"Price: {gold_price}g" if gold_price else "Price not found")
 alert_needed = False
 
 if on_ah and price:
+    # Special case: single listing higher than stored -> wipe memory
+    if amount == 1 and state["last_price"] is not None and price > state["last_price"]:
+        print("Single high listing detected — wiping memory")
+        state["last_price"] = None
+        state["last_amount"] = None
+
+    # Normal alert logic
     if state["last_price"] is None:
         alert_needed = True
     elif price < state["last_price"]:
@@ -81,6 +88,7 @@ if on_ah and price:
             print("Discord alert sent!")
         except Exception as e:
             print("Failed to send Discord alert:", e)
+
 else:
     # Item not listed — wipe stored state
     state["last_price"] = None
