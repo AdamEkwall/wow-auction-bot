@@ -1,76 +1,82 @@
+import requests
 import os
 import json
-import requests
+import re
 
 # CONFIG
-ITEM_URL = "https://www.wowauctions.net/_next/data/Q3nbXdN5bJfNCngEBsXEq/auctionHouse/chromie-craft/chromiecraft/mergedAh/bold-stormjewel-45862.json"
+BUILD_ID = "Q3nbXdN5bJfNCngEBsXEq"
+URL = f"https://www.wowauctions.net/_next/data/{BUILD_ID}/auctionHouse/chromie-craft/chromiecraft/mergedAh/bold-stormjewel-45862.json"
+
 STATE_FILE = "state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
-DISCORD_USER_ID = "203262759113195520"  # @Ekwall
+DISCORD_USER_ID = "203262759113195520"
 
-# Load previous state
+# Load state
 if os.path.exists(STATE_FILE):
     with open(STATE_FILE, "r") as f:
         state = json.load(f)
 else:
     state = {}
 
-# Ensure keys exist
 state.setdefault("last_price", None)
-state.setdefault("last_amount", None)
 
-# Fetch JSON data
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0",
-    "Accept": "*/*",
-    "Referer": "https://www.wowauctions.net/",
-    "x-nextjs-data": "1",
-}
-response = requests.get(ITEM_URL, headers=headers)
+# Fetch via proxy (optional, keeps Cloudflare away)
+proxy_url = f"https://r.jina.ai/{URL}"
+response = requests.get(proxy_url)
 
 if response.status_code != 200:
-    print(f"Request failed: {response.status_code}")
-    print(response.text[:500])  # preview
-    exit(1)
+    print("Request failed:", response.status_code)
+    print(response.text[:300])
+    exit()
 
-# Parse JSON safely
-try:
-    data = response.json()
-except json.JSONDecodeError as e:
-    print("Failed to parse JSON:", e)
-    exit(1)
+text = response.text
 
-# Extract values
+# 🔥 Extract JSON from wrapped response
+start = text.find("{")
+end = text.rfind("}") + 1
+
+if start == -1 or end == -1:
+    print("Could not find JSON in response")
+    exit()
+
+json_text = text[start:end]
+
+# Remove problematic tooltip field (contains broken HTML)
+json_text = re.sub(r'"tooltip":.*?"\}', '"tooltip":""}', json_text)
+
+# Fix escaped line breaks
+json_text = json_text.replace("\n", "").replace("\r", "")
+
+data = json.loads(json_text)
+
+# Extract stats and timestamps
 item = data["pageProps"]["item"]
 stats = item["stats"]
 
-price = stats.get("minimum_buyout", 0)
-amount = stats.get("item_count", 0)
-gold = price // 10000  # convert copper → gold
+price = stats["minimum_buyout"]
+amount = stats["item_count"]
 
+# Use timestamps to check if item is currently on AH
+item_last_seen = stats["item_last_seen"]
+realm_last_scan = item.get("realm_last_scan", item_last_seen)  # fallback if missing
+
+item_on_ah = (item_last_seen == realm_last_scan)
+
+# Convert copper → gold
+gold = price // 10000 if price else 0
+
+print(f"item_last_seen: {item_last_seen}")
+print(f"realm_last_scan: {realm_last_scan}")
+print(f"Item on AH: {item_on_ah}")
 print(f"Price: {gold}g | Amount: {amount}")
 
-# Detect if item is actually on AH
-item_on_ah = False
-
-# Primary check
-if amount > 0:
-    item_on_ah = True
-
-# Secondary safety check (tooltip text)
-tooltip = item.get("tooltip", "")
-if "not on the auction house right now" in tooltip.lower():
-    item_on_ah = False
-
-if not item_on_ah:
-    print("Item not on AH.")
-else:
+# Alert logic
+if item_on_ah:
     alert_needed = False
 
-    # Determine if alert should be sent
     if state["last_price"] is None:
         alert_needed = True
-    elif gold < state["last_price"]:
+    elif price < state["last_price"]:
         alert_needed = True
 
     if alert_needed:
@@ -78,9 +84,10 @@ else:
         requests.post(WEBHOOK_URL, json={"content": content})
         print("Discord alert sent!")
 
-# Update state
-state["last_price"] = gold
-state["last_amount"] = amount
+    # Update state
+    state["last_price"] = price
+else:
+    print("Item not currently listed.")
 
 # Save state
 with open(STATE_FILE, "w") as f:
