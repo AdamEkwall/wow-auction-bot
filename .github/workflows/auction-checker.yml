@@ -12,7 +12,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: false  # disable github-actions[bot] token
+          persist-credentials: false  # disables github-actions[bot] token
 
       # Step 2: Setup Python
       - name: Setup Python
