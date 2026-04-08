@@ -1,41 +1,86 @@
 import requests
 import os
 import re
+import json
 
+# ================= CONFIG =================
 URL = "https://www.wowauctions.net/auctionHouse/chromie-craft/chromiecraft/mergedAh/bold-stormjewel-45862"
+PROXY_URL = f"https://r.jina.ai/{URL}"
+STATE_FILE = "state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 DISCORD_USER_ID = "203262759113195520"
+TIMEOUT = 20  # seconds
+# =========================================
 
-# Fetch via jina proxy
-proxy_url = f"https://r.jina.ai/{URL}"
-response = requests.get(proxy_url, timeout=20)
+# -------- Load previous state -------------
+if os.path.exists(STATE_FILE):
+    with open(STATE_FILE, "r") as f:
+        state = json.load(f)
+else:
+    state = {}
 
-if response.status_code != 200:
-    print("Request failed:", response.status_code)
+state.setdefault("last_price", None)
+state.setdefault("last_amount", None)
+
+# -------- Fetch page via proxy ------------
+try:
+    response = requests.get(PROXY_URL, timeout=TIMEOUT)
+    response.raise_for_status()
+    text = response.text.lower()
+except Exception as e:
+    print("Request failed:", e)
     exit()
 
-text = response.text.lower()
-
-# ❌ Check if item is NOT on AH
+# -------- Check if item is on AH ----------
 if "not on the auction house right now" in text:
-    print("Item not on AH.")
-    exit()
+    on_ah = False
+else:
+    on_ah = True
 
-print("Item IS on AH!")
-
-# 🔍 Extract price (minimum buyout)
-price_match = re.search(r"minimum buyout\s+(\d+)\s*g", text)
-
-# 🔍 Extract amount
+# -------- Extract Amount ------------------
 amount_match = re.search(r"amount\s+(\d+)", text)
+amount = int(amount_match.group(1)) if amount_match else 0
 
-price = int(price_match.group(1)) if price_match else None
-amount = int(amount_match.group(1)) if amount_match else None
+# -------- Extract Price (gold/silver/copper) ---------
+# Handles strings like "1599 g 0 s 50 c"
+price_match = re.search(r"minimum buyout\s+(\d+)\s*g(?:\s*(\d+)\s*s)?(?:\s*(\d+)\s*c)?", text)
+if price_match:
+    g = int(price_match.group(1))
+    s = int(price_match.group(2) or 0)
+    c = int(price_match.group(3) or 0)
+    price = g * 10000 + s * 100 + c  # total in copper
+else:
+    price = None
 
-print(f"Price: {price}g | Amount: {amount}")
+# -------- Convert to gold for printing -------
+gold_price = price // 10000 if price else None
 
-# Send Discord alert
-if WEBHOOK_URL:
-    content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {price}g | Amount: {amount}"
-    requests.post(WEBHOOK_URL, json={"content": content})
-    print("Discord alert sent!")
+# -------- Verification output ---------------
+print(f"Item on AH: {on_ah}")
+print(f"Amount: {amount}")
+print(f"Price: {gold_price}g" if gold_price else "Price not found")
+
+# -------- Alert logic ----------------------
+alert_needed = False
+
+if on_ah and price:
+    if state["last_price"] is None:
+        alert_needed = True
+    elif price < state["last_price"]:
+        alert_needed = True
+    elif amount != state.get("last_amount", 0):
+        alert_needed = True  # new amount change triggers alert
+
+    if alert_needed and WEBHOOK_URL:
+        content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {gold_price}g | Amount: {amount}"
+        requests.post(WEBHOOK_URL, json={"content": content})
+        print("Discord alert sent!")
+else:
+    print("Item not currently listed.")
+
+# -------- Update state ---------------------
+state["last_price"] = price
+state["last_amount"] = amount
+
+with open(STATE_FILE, "w") as f:
+    json.dump(state, f)
