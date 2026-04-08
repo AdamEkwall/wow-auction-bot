@@ -2,21 +2,18 @@ name: Auction Checker
 
 on:
   schedule:
-    - cron: "3,23,43 * * * *"  # every 20 minutes starting at 03 min UTC
+    - cron: "03,23,43 * * * *"  # every 20 minutes
   workflow_dispatch:
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Load previous state
+      - name: Restore state
         uses: actions/cache@v4
         with:
           path: state.json
