@@ -2,8 +2,11 @@ name: Auction Checker
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "3,23,43 * * * *"  # every 20 minutes starting at 03 min UTC
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run-bot:
@@ -13,6 +16,12 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Load previous state
+        uses: actions/cache@v4
+        with:
+          path: state.json
+          key: auction-state
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -21,7 +30,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install Chrome & Driver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser chromium-driver
+
       - name: Run bot
         run: python bot.py
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+
+      - name: Save state
+        uses: actions/cache@v4
+        with:
+          path: state.json
+          key: auction-state
