@@ -1,7 +1,7 @@
 import requests
 import os
 import json
-import re
+import time
 
 # CONFIG
 BUILD_ID = "Q3nbXdN5bJfNCngEBsXEq"
@@ -20,57 +20,71 @@ else:
 
 state.setdefault("last_price", None)
 
-# Fetch via proxy (optional, keeps Cloudflare away)
-proxy_url = f"https://r.jina.ai/{URL}"
-response = requests.get(proxy_url)
+# 🔁 Fetch with retry (important for free proxy reliability)
+def fetch_data():
+    proxy_url = f"https://r.jina.ai/{URL}"
 
-if response.status_code != 200:
-    print("Request failed:", response.status_code)
-    print(response.text[:300])
+    for attempt in range(2):  # try twice
+        try:
+            response = requests.get(proxy_url, timeout=20)
+
+            if response.status_code == 200:
+                return response.text
+
+            print(f"Attempt {attempt+1} failed with status:", response.status_code)
+
+        except Exception as e:
+            print(f"Attempt {attempt+1} error:", e)
+
+        time.sleep(2)
+
+    return None
+
+
+text = fetch_data()
+
+if not text:
+    print("Failed to fetch data.")
     exit()
 
-text = response.text
-
-# 🔥 Extract JSON from wrapped response
-start = text.find("{")
+# 🔥 Extract JSON safely (no regex hacks)
+start = text.find('{"pageProps"')
 end = text.rfind("}") + 1
 
 if start == -1 or end == -1:
-    print("Could not find JSON in response")
+    print("Could not extract JSON")
     exit()
 
 json_text = text[start:end]
 
-# Remove problematic tooltip field (contains broken HTML)
-json_text = re.sub(r'"tooltip":.*?"\}', '"tooltip":""}', json_text)
+try:
+    data = json.loads(json_text)
+except Exception as e:
+    print("JSON parsing failed:", e)
+    exit()
 
-# Fix escaped line breaks
-json_text = json_text.replace("\n", "").replace("\r", "")
-
-data = json.loads(json_text)
-
-# Extract stats and timestamps
+# Extract values
 item = data["pageProps"]["item"]
 stats = item["stats"]
 
-price = stats["minimum_buyout"]
-amount = stats["item_count"]
-
-# Use timestamps to check if item is currently on AH
-item_last_seen = stats["item_last_seen"]
-realm_last_scan = item.get("realm_last_scan", item_last_seen)  # fallback if missing
-
-item_on_ah = (item_last_seen == realm_last_scan)
+price = stats.get("minimum_buyout", 0)
+amount = stats.get("item_count", 0)
 
 # Convert copper → gold
 gold = price // 10000 if price else 0
+
+# ✅ Correct AH detection using timestamps
+item_last_seen = stats["item_last_seen"]
+realm_last_scan = item["realm_last_scan"]
+
+item_on_ah = (item_last_seen == realm_last_scan)
 
 print(f"item_last_seen: {item_last_seen}")
 print(f"realm_last_scan: {realm_last_scan}")
 print(f"Item on AH: {item_on_ah}")
 print(f"Price: {gold}g | Amount: {amount}")
 
-# Alert logic
+# 🚨 Alert logic
 if item_on_ah:
     alert_needed = False
 
@@ -84,7 +98,6 @@ if item_on_ah:
         requests.post(WEBHOOK_URL, json={"content": content})
         print("Discord alert sent!")
 
-    # Update state
     state["last_price"] = price
 else:
     print("Item not currently listed.")
