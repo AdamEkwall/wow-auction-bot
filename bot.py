@@ -21,7 +21,7 @@ else:
 
 state.setdefault("last_price", None)
 state.setdefault("last_amount", None)
-state.setdefault("last_alert_price", None)  # Track last alerted listing
+state.setdefault("last_alert_price", None)
 state.setdefault("last_alert_amount", None)
 
 # -------- Fetch page via proxy ------------
@@ -64,38 +64,38 @@ print(f"Item on AH: {on_ah}")
 print(f"Amount: {amount}")
 print(f"Price: {gold_price}g" if gold_price else "Price not found")
 
+# -------- Compute unique listing ID ---------
+listing_id = f"{price}_{amount}" if price else None
+last_alert_id = f"{state.get('last_alert_price')}_{state.get('last_alert_amount')}"
+
 # -------- Alert logic ----------------------
 alert_needed = False
 
 if on_ah and price:
-    # New listing, price drop, or amount change triggers alert
-    if state["last_price"] is None:
-        alert_needed = True
-    elif price < state["last_price"]:
-        alert_needed = True
-    elif amount != state.get("last_amount", 0):
-        alert_needed = True
-    # Single higher listing wipes memory and triggers alert
-    elif amount == 1 and state["last_price"] and price > state["last_price"]:
+    # wipe memory if single higher-price listing
+    if amount == 1 and state["last_price"] and price > state["last_price"]:
         print("Single listing higher than previous → wiping memory")
         state["last_price"] = None
         state["last_amount"] = None
-        alert_needed = True
+        state["last_alert_price"] = None
+        state["last_alert_amount"] = None
 
-    # Avoid duplicate Discord notifications
-    if state.get("last_alert_price") == price and state.get("last_alert_amount") == amount:
+    # check if this is a new auction to alert
+    if listing_id != last_alert_id:
+        alert_needed = True
+    else:
         alert_needed = False
 
     if alert_needed and WEBHOOK_URL:
         content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {gold_price}g | Amount: {amount}"
         requests.post(WEBHOOK_URL, json={"content": content})
         print("Discord alert sent!")
-        # Store what we just alerted for
+        # store what we just alerted
         state["last_alert_price"] = price
         state["last_alert_amount"] = amount
 
 else:
-    # Item removed → wipe all state
+    # item removed → wipe all state
     if state["last_price"] is not None:
         print("Item removed from AH → wiping memory")
     state["last_price"] = None
@@ -104,7 +104,7 @@ else:
     state["last_alert_amount"] = None
     print("Item not currently listed.")
 
-# -------- Update state ---------------------
+# -------- Update last seen state ---------------------
 state["last_price"] = price if on_ah else None
 state["last_amount"] = amount if on_ah else None
 
