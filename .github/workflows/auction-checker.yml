@@ -1,9 +1,6 @@
-# force GitHub to re-register cron
 name: Auction Checker
 
 on:
-  schedule:
-    - cron: "05,25,45 * * * *"  # every 20 minutes
   workflow_dispatch:
 
 jobs:
@@ -38,9 +35,6 @@ jobs:
         with:
           path: state.json
           key: auction-state
-
-      - name: Force schedule registration
-        run: echo "GitHub cron re-registered"
 
       - name: Show state.json
         run: cat state.json || echo "state.json does not exist"
