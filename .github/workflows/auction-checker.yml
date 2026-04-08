@@ -1,3 +1,4 @@
+# force GitHub to re-register cron
 name: Auction Checker
 
 on:
