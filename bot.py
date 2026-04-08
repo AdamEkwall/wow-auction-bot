@@ -38,7 +38,15 @@ if start == -1 or end == -1:
     print("Could not find JSON in response")
     exit()
 
+import re
+
 json_text = text[start:end]
+
+# Remove problematic tooltip field (contains broken HTML)
+json_text = re.sub(r'"tooltip":.*?"\}', '"tooltip":""}', json_text)
+
+# Fix escaped line breaks
+json_text = json_text.replace("\n", "").replace("\r", "")
 
 data = json.loads(json_text)
 
