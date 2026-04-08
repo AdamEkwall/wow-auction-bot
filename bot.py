@@ -24,7 +24,11 @@ state.setdefault("last_amount", None)
 
 # -------- Fetch page via proxy ------------
 try:
-    response = requests.get(PROXY_URL, timeout=TIMEOUT)
+    response = requests.get(
+        PROXY_URL,
+        timeout=TIMEOUT,
+        headers={"x-no-cache": "true"}  # <- add this line
+    )
     response.raise_for_status()
     text = response.text.lower()
 except Exception as e:
