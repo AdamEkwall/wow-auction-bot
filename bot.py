@@ -27,7 +27,7 @@ try:
     response = requests.get(
         PROXY_URL,
         timeout=TIMEOUT,
-        headers={"x-no-cache": "true"}  # <- add this line
+        headers={"x-no-cache": "true"}  # fetch fresh content
     )
     response.raise_for_status()
     text = response.text.lower()
@@ -46,7 +46,6 @@ amount_match = re.search(r"amount\s+(\d+)", text)
 amount = int(amount_match.group(1)) if amount_match else 0
 
 # -------- Extract Price (gold/silver/copper) ---------
-# Handles strings like "1599 g 0 s 50 c"
 price_match = re.search(r"minimum buyout\s+(\d+)\s*g(?:\s*(\d+)\s*s)?(?:\s*(\d+)\s*c)?", text)
 if price_match:
     g = int(price_match.group(1))
@@ -77,10 +76,16 @@ if on_ah and price:
 
     if alert_needed and WEBHOOK_URL:
         content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {gold_price}g | Amount: {amount}"
-        requests.post(WEBHOOK_URL, json={"content": content})
-        print("Discord alert sent!")
+        try:
+            requests.post(WEBHOOK_URL, json={"content": content}, timeout=10)
+            print("Discord alert sent!")
+        except Exception as e:
+            print("Failed to send Discord alert:", e)
 else:
-    print("Item not currently listed.")
+    # Item not listed — wipe stored state
+    state["last_price"] = None
+    state["last_amount"] = None
+    print("Item removed from AH — memory wiped")
 
 # -------- Update state ---------------------
 state["last_price"] = price
