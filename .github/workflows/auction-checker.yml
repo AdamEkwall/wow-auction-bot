@@ -38,3 +38,6 @@ jobs:
         with:
           path: state.json
           key: auction-state
+
+      - name: Force schedule registration
+        run: echo "GitHub cron re-registered"
