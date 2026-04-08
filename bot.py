@@ -1,7 +1,6 @@
 import requests
 import os
 import json
-import time
 import re
 
 # CONFIG
@@ -21,39 +20,27 @@ else:
 
 state.setdefault("last_price", None)
 
-# Fetch via proxy
-def fetch_data():
-    proxy_url = f"https://r.jina.ai/{URL}"
-    for attempt in range(2):
-        try:
-            response = requests.get(proxy_url, timeout=20)
-            if response.status_code == 200:
-                return response.text
-            print(f"Attempt {attempt+1} failed with status:", response.status_code)
-        except Exception as e:
-            print(f"Attempt {attempt+1} error:", e)
-        time.sleep(2)
-    return None
-
-text = fetch_data()
-if not text:
-    print("Failed to fetch data.")
+# Fetch data
+response = requests.get(f"https://r.jina.ai/{URL}", timeout=20)
+if response.status_code != 200:
+    print("Request failed:", response.status_code)
     exit()
 
-# Extract JSON from wrapped response
+text = response.text
+
+# Extract JSON start/end
 start = text.find('{"pageProps"')
 end = text.rfind("}") + 1
 if start == -1 or end == -1:
     print("Could not extract JSON")
     exit()
+
 json_text = text[start:end]
 
-# ✅ Clean problematic tooltip field safely
-# Tooltip contains HTML with unescaped line breaks or quotes
-# We replace it with an empty string
-json_text = re.sub(r'"tooltip":\s*".*?"', '"tooltip":""', json_text, flags=re.DOTALL)
+# Remove tooltip safely — handles inner quotes and line breaks
+json_text = re.sub(r'"tooltip"\s*:\s*"([^"]|\\")*?"', '"tooltip":""', json_text, flags=re.DOTALL)
 
-# Fix escaped line breaks
+# Remove any line breaks
 json_text = json_text.replace("\n", "").replace("\r", "")
 
 # Parse JSON
@@ -73,7 +60,7 @@ amount = stats.get("item_count", 0)
 # Convert copper → gold
 gold = price // 10000 if price else 0
 
-# Correct AH detection
+# Detect AH
 item_last_seen = stats["item_last_seen"]
 realm_last_scan = item["realm_last_scan"]
 item_on_ah = (item_last_seen == realm_last_scan)
