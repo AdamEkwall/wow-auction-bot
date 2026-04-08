@@ -41,3 +41,6 @@ jobs:
 
       - name: Force schedule registration
         run: echo "GitHub cron re-registered"
+
+      - name: Show state.json
+        run: cat state.json || echo "state.json does not exist"
