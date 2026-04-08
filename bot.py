@@ -2,6 +2,7 @@ import requests
 import os
 import re
 import json
+import subprocess
 
 # ================= CONFIG =================
 URL = "https://www.wowauctions.net/auctionHouse/chromie-craft/chromiecraft/mergedAh/bold-stormjewel-45862"
@@ -10,7 +11,12 @@ STATE_FILE = "state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 DISCORD_USER_ID = "203262759113195520"
 TIMEOUT = 20  # seconds
+BRANCH = "auction-state"
 # =========================================
+
+# -------- Ensure we are on the state branch -------------
+subprocess.run(["git", "fetch", "origin", BRANCH], check=False)
+subprocess.run(["git", "checkout", "-B", BRANCH], check=True)
 
 # -------- Load previous state -------------
 if os.path.exists(STATE_FILE):
@@ -27,7 +33,7 @@ try:
     response = requests.get(
         PROXY_URL,
         timeout=TIMEOUT,
-        headers={"x-no-cache": "true"}  # fetch fresh content
+        headers={"x-no-cache": "true"}
     )
     response.raise_for_status()
     text = response.text.lower()
@@ -55,7 +61,6 @@ if price_match:
 else:
     price = None
 
-# -------- Convert to gold for printing -------
 gold_price = price // 10000 if price else None
 
 # -------- Verification output ---------------
@@ -67,37 +72,32 @@ print(f"Price: {gold_price}g" if gold_price else "Price not found")
 alert_needed = False
 
 if on_ah and price:
-    # Special case: single listing higher than stored -> wipe memory
-    if amount == 1 and state["last_price"] is not None and price > state["last_price"]:
-        print("Single high listing detected — wiping memory")
-        state["last_price"] = None
-        state["last_amount"] = None
-
-    # Normal alert logic
+    # New logic: wipe memory if only one item is listed and price increased
     if state["last_price"] is None:
         alert_needed = True
     elif price < state["last_price"]:
         alert_needed = True
     elif amount != state.get("last_amount", 0):
-        alert_needed = True  # new amount change triggers alert
+        alert_needed = True
+    elif amount == 1 and state["last_price"] and price > state["last_price"]:
+        # New listing with higher price, reset memory
+        state["last_price"] = None
+        state["last_amount"] = None
+        alert_needed = True
 
     if alert_needed and WEBHOOK_URL:
         content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {gold_price}g | Amount: {amount}"
-        try:
-            requests.post(WEBHOOK_URL, json={"content": content}, timeout=10)
-            print("Discord alert sent!")
-        except Exception as e:
-            print("Failed to send Discord alert:", e)
-
+        requests.post(WEBHOOK_URL, json={"content": content})
+        print("Discord alert sent!")
 else:
-    # Item not listed — wipe stored state
+    print("Item not currently listed.")
+    # Wipe memory if no listing
     state["last_price"] = None
     state["last_amount"] = None
-    print("Item removed from AH — memory wiped")
 
 # -------- Update state ---------------------
-state["last_price"] = price
-state["last_amount"] = amount
+state["last_price"] = price if on_ah else None
+state["last_amount"] = amount if on_ah else None
 
 with open(STATE_FILE, "w") as f:
     json.dump(state, f)
