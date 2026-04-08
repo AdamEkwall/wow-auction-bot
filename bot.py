@@ -1,7 +1,6 @@
 import requests
 import os
 import json
-import re
 
 # CONFIG
 BUILD_ID = "Q3nbXdN5bJfNCngEBsXEq"
@@ -11,7 +10,7 @@ STATE_FILE = "state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 DISCORD_USER_ID = "203262759113195520"
 
-# Load state
+# Load previous state
 if os.path.exists(STATE_FILE):
     with open(STATE_FILE, "r") as f:
         state = json.load(f)
@@ -20,7 +19,7 @@ else:
 
 state.setdefault("last_price", None)
 
-# Fetch data
+# Fetch via proxy
 response = requests.get(f"https://r.jina.ai/{URL}", timeout=20)
 if response.status_code != 200:
     print("Request failed:", response.status_code)
@@ -37,10 +36,18 @@ if start == -1 or end == -1:
 
 json_text = text[start:end]
 
-# Remove tooltip safely — handles inner quotes and line breaks
-json_text = re.sub(r'"tooltip"\s*:\s*"([^"]|\\")*?"', '"tooltip":""', json_text, flags=re.DOTALL)
+# --- Robust tooltip removal ---
+# Parse using a relaxed approach, remove tooltip key before json.loads
+def remove_tooltip(json_str):
+    """Removes the tooltip field completely to avoid invalid JSON."""
+    import re
+    # Matches "tooltip": followed by anything until the next , or }
+    pattern = r'"tooltip"\s*:\s*".*?"(\s*,)?'
+    return re.sub(pattern, '', json_str, flags=re.DOTALL)
 
-# Remove any line breaks
+json_text = remove_tooltip(json_text)
+
+# Remove line breaks
 json_text = json_text.replace("\n", "").replace("\r", "")
 
 # Parse JSON
@@ -60,9 +67,9 @@ amount = stats.get("item_count", 0)
 # Convert copper → gold
 gold = price // 10000 if price else 0
 
-# Detect AH
-item_last_seen = stats["item_last_seen"]
-realm_last_scan = item["realm_last_scan"]
+# Detect if item is currently on AH
+item_last_seen = stats.get("item_last_seen")
+realm_last_scan = item.get("realm_last_scan")
 item_on_ah = (item_last_seen == realm_last_scan)
 
 print(f"item_last_seen: {item_last_seen}")
