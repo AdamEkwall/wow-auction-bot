@@ -38,7 +38,8 @@ jobs:
           git checkout -B auction-state
           git add state.json
           git commit -m "Update auction state [skip ci]" || echo "No changes to commit"
-          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/AdamEkwall/wow-auction-bot.git
+          git remote remove origin
+          git remote add origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/AdamEkwall/wow-auction-bot.git
           git push origin auction-state --force
 
       # Step 6: Show state.json (optional, for debugging)
