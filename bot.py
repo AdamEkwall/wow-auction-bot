@@ -1,6 +1,7 @@
 import requests
 import os
 import json
+import re
 
 # CONFIG
 BUILD_ID = "Q3nbXdN5bJfNCngEBsXEq"
@@ -36,24 +37,18 @@ if start == -1 or end == -1:
 
 json_text = text[start:end]
 
-# --- Robust tooltip removal ---
-# Parse using a relaxed approach, remove tooltip key before json.loads
-def remove_tooltip(json_str):
-    """Removes the tooltip field completely to avoid invalid JSON."""
-    import re
-    # Matches "tooltip": followed by anything until the next , or }
-    pattern = r'"tooltip"\s*:\s*".*?"(\s*,)?'
-    return re.sub(pattern, '', json_str, flags=re.DOTALL)
+# --- Remove tooltip and any other problematic keys ---
+# Matches: "tooltip": anything until the next } or ,
+pattern = r'"tooltip"\s*:\s*"(?:\\.|[^"\\])*"\s*,?'
+json_text = re.sub(pattern, '', json_text, flags=re.DOTALL)
 
-json_text = remove_tooltip(json_text)
-
-# Remove line breaks
+# Remove newlines
 json_text = json_text.replace("\n", "").replace("\r", "")
 
-# Parse JSON
+# Now parse JSON
 try:
     data = json.loads(json_text)
-except Exception as e:
+except json.JSONDecodeError as e:
     print("JSON parsing failed:", e)
     exit()
 
