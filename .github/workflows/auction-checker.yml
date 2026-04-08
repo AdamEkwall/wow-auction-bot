@@ -8,11 +8,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout repository
+      # Step 1: Checkout repository WITHOUT default credentials
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: true  # needed for pushing changes
+          persist-credentials: false  # disable github-actions[bot] token
 
       # Step 2: Setup Python
       - name: Setup Python
@@ -30,11 +30,11 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 
-      # Step 5: Commit updated state.json to auction-state branch
+      # Step 5: Commit updated state.json to auction-state branch using PAT
       - name: Commit updated state.json
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "GitHub Actions Bot"
+          git config --local user.email "actions@github.com"
           git checkout -B auction-state
           git add state.json
           git commit -m "Update auction state [skip ci]" || echo "No changes to commit"
@@ -42,6 +42,6 @@ jobs:
           git remote add origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/AdamEkwall/wow-auction-bot.git
           git push origin auction-state --force
 
-      # Step 6: Show state.json (optional, for debugging)
+      # Step 6: Show state.json for debugging
       - name: Show state.json
         run: cat state.json || echo "state.json does not exist"
