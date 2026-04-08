@@ -33,12 +33,13 @@ jobs:
       # Step 5: Commit updated state.json to auction-state branch
       - name: Commit updated state.json
         run: |
-           git config --local user.name "github-actions[bot]"
-           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-           git checkout -B auction-state
-           git add state.json
-           git commit -m "Update auction state [skip ci]" || echo "No changes to commit"
-           git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/AdamEkwall/wow-auction-bot.git auction-state --force
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B auction-state
+          git add state.json
+          git commit -m "Update auction state [skip ci]" || echo "No changes to commit"
+          git remote set-url origin https://x-access-token:${{ secrets.GH_PAT }}@github.com/AdamEkwall/wow-auction-bot.git
+          git push origin auction-state --force
 
       # Step 6: Show state.json (optional, for debugging)
       - name: Show state.json
