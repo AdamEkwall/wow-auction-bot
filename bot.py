@@ -21,16 +21,10 @@ else:
 
 state.setdefault("last_price", None)
 state.setdefault("last_amount", None)
-state.setdefault("last_alert_price", None)
-state.setdefault("last_alert_amount", None)
 
 # -------- Fetch page via proxy ------------
 try:
-    response = requests.get(
-        PROXY_URL,
-        timeout=TIMEOUT,
-        headers={"x-no-cache": "true"}  # prevent caching
-    )
+    response = requests.get(PROXY_URL, timeout=TIMEOUT, headers={"x-no-cache": "true"})
     response.raise_for_status()
     text = response.text.lower()
 except Exception as e:
@@ -52,11 +46,10 @@ if price_match:
     g = int(price_match.group(1))
     s = int(price_match.group(2) or 0)
     c = int(price_match.group(3) or 0)
-    price = g * 10000 + s * 100 + c  # total in copper
+    price = g * 10000 + s * 100 + c
 else:
     price = None
 
-# -------- Convert to gold for printing -------
 gold_price = price // 10000 if price else None
 
 # -------- Verification output ---------------
@@ -64,49 +57,35 @@ print(f"Item on AH: {on_ah}")
 print(f"Amount: {amount}")
 print(f"Price: {gold_price}g" if gold_price else "Price not found")
 
-# -------- Compute unique listing ID ---------
-listing_id = f"{price}_{amount}" if price else None
-last_alert_id = f"{state.get('last_alert_price')}_{state.get('last_alert_amount')}"
-
 # -------- Alert logic ----------------------
 alert_needed = False
 
 if on_ah and price:
-    # wipe memory if single higher-price listing
-    if amount == 1 and state["last_price"] and price > state["last_price"]:
-        print("Single listing higher than previous → wiping memory")
-        state["last_price"] = None
-        state["last_amount"] = None
-        state["last_alert_price"] = None
-        state["last_alert_amount"] = None
-
-    # check if this is a new auction to alert
-    if listing_id != last_alert_id:
+    # Case 1: New listing (no previous listing stored)
+    if state["last_price"] is None:
         alert_needed = True
-    else:
-        alert_needed = False
+        print("New listing detected → alert triggered")
+    # Case 2: Undercut (current price lower than last seen price)
+    elif price < state["last_price"]:
+        alert_needed = True
+        print("Price undercut detected → alert triggered")
 
     if alert_needed and WEBHOOK_URL:
         content = f"<@{DISCORD_USER_ID}> 🔥 Bold Stormjewel is on AH! Price: {gold_price}g | Amount: {amount}"
         requests.post(WEBHOOK_URL, json={"content": content})
         print("Discord alert sent!")
-        # store what we just alerted
-        state["last_alert_price"] = price
-        state["last_alert_amount"] = amount
+
+    # Update last seen state
+    state["last_price"] = price
+    state["last_amount"] = amount
 
 else:
-    # item removed → wipe all state
+    # Item removed → wipe memory
     if state["last_price"] is not None:
         print("Item removed from AH → wiping memory")
     state["last_price"] = None
     state["last_amount"] = None
-    state["last_alert_price"] = None
-    state["last_alert_amount"] = None
-    print("Item not currently listed.")
 
-# -------- Update last seen state ---------------------
-state["last_price"] = price if on_ah else None
-state["last_amount"] = amount if on_ah else None
-
+# -------- Save state ---------------------
 with open(STATE_FILE, "w") as f:
     json.dump(state, f)
