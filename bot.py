@@ -32,7 +32,10 @@ if response.status_code != 200:
     print(response.text[:300])
     exit()
 
-data = response.json()
+print("STATUS:", response.status_code)
+print("RAW RESPONSE:")
+print(response.text[:1000])
+exit()
 
 # Extract values
 stats = data["pageProps"]["item"]["stats"]
