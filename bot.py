@@ -24,7 +24,8 @@ headers = {
     "User-Agent": "Mozilla/5.0"
 }
 
-response = requests.get(URL, headers=headers)
+proxy_url = f"https://r.jina.ai/{URL}"
+response = requests.get(proxy_url)
 
 if response.status_code != 200:
     print("Request failed:", response.status_code)
