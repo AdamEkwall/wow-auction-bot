@@ -2,6 +2,7 @@ import requests
 import os
 import re
 import json
+from datetime import datetime, timezone
 
 # ================= CONFIG =================
 URL = "https://www.wowauctions.net/auctionHouse/chromie-craft/chromiecraft/mergedAh/bold-stormjewel-45862"
@@ -10,6 +11,7 @@ STATE_FILE = "state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 DISCORD_USER_ID = "203262759113195520"
 TIMEOUT = 20
+BLOCK_REMINDER_RUNS = 6  # Remind every 6 blocked runs (~2 hours at 20min intervals)
 # ==========================================
 
 # -------- Load state ----------------------
@@ -21,14 +23,52 @@ else:
 
 state.setdefault("last_price", None)
 state.setdefault("last_amount", None)
+state.setdefault("jina_blocked", False)
+state.setdefault("blocked_run_count", 0)
 
 # -------- Fetch page ----------------------
 try:
     response = requests.get(PROXY_URL, timeout=TIMEOUT, headers={"x-no-cache": "true"})
     response.raise_for_status()
     text = response.text.lower()
+
+    # Jina recovered after a block → alert
+    if state["jina_blocked"]:
+        print("Jina access restored → alert triggered")
+        if WEBHOOK_URL:
+            requests.post(WEBHOOK_URL, json={
+                "content": f"<@{DISCORD_USER_ID}> ✅ Auction bot is back online! Jina access restored."
+            })
+        state["jina_blocked"] = False
+        state["blocked_run_count"] = 0
+
+except requests.exceptions.HTTPError as e:
+    if e.response.status_code == 451:
+        state["blocked_run_count"] += 1
+        print(f"Jina blocked (451) → run {state['blocked_run_count']}")
+
+        first_block = not state["jina_blocked"]
+        reminder_due = state["blocked_run_count"] % BLOCK_REMINDER_RUNS == 0
+
+        if (first_block or reminder_due) and WEBHOOK_URL:
+            hours_blocked = (state["blocked_run_count"] * 20) // 60
+            mins_blocked = (state["blocked_run_count"] * 20) % 60
+            duration = f"{hours_blocked}h {mins_blocked}m" if hours_blocked else f"{mins_blocked}m"
+            requests.post(WEBHOOK_URL, json={
+                "content": f"<@{DISCORD_USER_ID}> ⚠️ Auction bot is blocked (451 Legal Error). Has been down for ~{duration}. Will retry next run."
+            })
+
+        state["jina_blocked"] = True
+    else:
+        print("HTTP error:", e)
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f)
+    exit()
+
 except Exception as e:
     print("Request failed:", e)
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f)
     exit()
 
 # -------- Parse page ----------------------
