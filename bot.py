@@ -33,6 +33,7 @@ try:
     response = requests.get(PROXY_URL, timeout=TIMEOUT, headers={"x-no-cache": "true"})
     response.raise_for_status()
     text = response.text.lower()
+    print(text[:3000])
 
     # Jina recovered after a block → alert
     if state["jina_blocked"]:
