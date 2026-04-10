@@ -11,7 +11,7 @@ STATE_FILE = "state.json"
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 DISCORD_USER_ID = "203262759113195520"
 TIMEOUT = 20
-BLOCK_REMINDER_RUNS = 6      # Remind every 6 blocked runs (~2 hours at 20min intervals)
+BLOCK_REMINDER_RUNS = 6       # Remind every 6 blocked runs (~2 hours at 20min intervals)
 STALE_THRESHOLD_MINUTES = 20  # Alert if data is older than this
 # ==========================================
 
@@ -33,7 +33,6 @@ try:
     response = requests.get(PROXY_URL, timeout=TIMEOUT, headers={"x-no-cache": "true"})
     response.raise_for_status()
     text = response.text.lower()
-    print(text[:3000])
 
     # Jina recovered after a block → alert
     if state["jina_blocked"]:
@@ -75,10 +74,10 @@ except Exception as e:
     exit()
 
 # -------- Check data freshness ------------
-scan_match = re.search(r"last scanned[:\s]+([0-9]{4}-[0-9]{2}-[0-9]{2}[t\s][0-9]{2}:[0-9]{2})", text)
+scan_match = re.search(r"last scan of this ah:.*?\((\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) utc\)", text)
 if scan_match:
     try:
-        scan_time = datetime.fromisoformat(scan_match.group(1).replace(" ", "T")).replace(tzinfo=timezone.utc)
+        scan_time = datetime.strptime(scan_match.group(1), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
         now = datetime.now(timezone.utc)
         minutes_old = (now - scan_time).total_seconds() / 60
         print(f"Data last scanned: {scan_match.group(1)} ({minutes_old:.1f}m ago)")
@@ -103,7 +102,7 @@ amount_match = re.search(r"amount\s+(\d+)", text)
 amount = int(amount_match.group(1)) if amount_match else 0
 
 price_match = re.search(
-    r"minimum buyout\s+(\d+)\s*g(?:\s*(\d+)\s*s)?(?:\s*(\d+)\s*c)?", text
+    r"minimum buyout\s+(\d+)\s*g(?:\s*(\d+)\s*s)?(?:\s*(\d+)\s*c)?",text
 )
 if price_match:
     g = int(price_match.group(1))
