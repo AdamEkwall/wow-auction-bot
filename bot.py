@@ -12,7 +12,7 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 DISCORD_USER_ID = "203262759113195520"
 TIMEOUT = 20
 BLOCK_REMINDER_RUNS = 6       # Remind every 6 runs (~2 hours at 20min intervals)
-STALE_THRESHOLD_MINUTES = 20  # Alert if data is older than this
+STALE_THRESHOLD_MINUTES = 40  # Alert if data is older than this
 RUN_NUMBER = os.environ.get("GITHUB_RUN_NUMBER", "unknown")
 # ==========================================
 
